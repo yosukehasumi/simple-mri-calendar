@@ -1,11 +1,6 @@
-
-This is a one file plugin that you can use to create a bare-bones calendar for wordpress.
-
-simple-mri-calendar.php
-
 # Project Name
 
-Simple MRI Calendar
+Simple MRI Calendar - This is a one file plugin that you can use to create a bare-bones calendar for wordpress.
 
 ## Installation
 
