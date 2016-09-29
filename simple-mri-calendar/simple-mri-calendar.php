@@ -11,7 +11,6 @@ Author URI:   http://yosuke.ca
 class SimpleMRICalendar {
 
   private static $post_type_slug = 'calendar';
-  public  static $timezone       = 'America/New_York';
 
   public static function init() {
     self::register_mri_event();
@@ -19,6 +18,17 @@ class SimpleMRICalendar {
     flush_rewrite_rules();
   }
 
+  //---------------------------------------------------------------
+  public static function date($args = false){
+    $date       = new DateTime();
+    $date->setTimezone(new DateTimeZone(get_option('timezone_string')));
+    if($args){
+      if($args['year'] && $args['month'] && $args['day']){
+        $date->setDate($args['year'], $args['month'], $args['day']);
+      }
+    }
+    return $date;
+  }
   //---------------------------------------------------------------
   private static function register_mri_event() {
     register_post_type( 'mri_event', array(
@@ -38,9 +48,25 @@ class SimpleMRICalendar {
         'title' => 'Event Date',
         'fields' => array (
           array (
-            'key' => 'field_56df2fcdbe7af',
-            'label' => 'Date',
-            'name' => 'date',
+            'key' => 'field_56df2fcdbe7astart',
+            'label' => 'Start Date',
+            'name' => 'start_date',
+            'type' => 'date_time_picker',
+            'instructions' => '',
+            'required' => 1,
+            'conditional_logic' => 0,
+            'show_date' => 'true',
+            'date_format' => 'm/d/y',
+            'time_format' => 'h:mm tt',
+            'show_week_number' => 'false',
+            'picker' => 'slider',
+            'save_as_timestamp' => 'true',
+            'get_as_timestamp' => 'true',
+          ),
+          array (
+            'key' => 'field_56df2fcdbe7aend',
+            'label' => 'End Date',
+            'name' => 'end_date',
             'type' => 'date_time_picker',
             'instructions' => '',
             'required' => 1,
@@ -74,30 +100,19 @@ function simple_mri_calendar() {
   global $post;
   function get_post_ids($post) { return $post->ID; }
 
-  $today       = new DateTime();
-  $today->setTimezone(new DateTimeZone(SimpleMRICalendar::$timezone));
+  $today       = SimpleMRICalendar::date();
   $query_cal   = ($_REQUEST['cal'] != '' ? $_REQUEST['cal'] : $today->format('Y-m'));
   $year        = explode('-', $query_cal)[0];
   $month       = explode('-', $query_cal)[1];
-  $this_month  = new DateTime(implode('-', array($year,$month,10)));
-  $this_month->setTimezone(new DateTimeZone(SimpleMRICalendar::$timezone));
-  if($_REQUEST['prod'] != ''){
-    $production = get_post($_REQUEST['prod']);
-    $production_ids = array($production->ID);
-  }else{
-    $productions = get_posts('post_type=production&posts_per_page=-1');
-    $production_ids = array_map("get_post_ids", $productions);
-  }
+  $this_month  = SimpleMRICalendar::date(array('year'=>$year, 'month'=>$month, 'day'=>15));
 
   $last_month = clone $this_month;
-  $last_month->modify('last day of last month');
+  $last_month->modify('first day of last month');
   $last_month_url = add_query_arg( 'cal', $last_month->format('Y') . '-' . $last_month->format('m'), get_permalink($post) );
-  if($_REQUEST['prod'] != '') $last_month_url = add_query_arg( 'prod', implode(',',$production_ids), $last_month_url );
 
   $next_month = clone $this_month;
   $next_month->modify('first day of next month');
   $next_month_url = add_query_arg( 'cal', $next_month->format('Y') . '-' . $next_month->format('m'), get_permalink($post) );
-  if($_REQUEST['prod'] != '') $next_month_url = add_query_arg( 'prod', implode(',',$production_ids), $next_month_url );
 
   $first_day = clone $this_month;
   $first_day->modify('first day of this month');
@@ -135,31 +150,32 @@ function simple_mri_calendar() {
 
   //--------------------------------------------------------------- Dates
   for ($i = 1 ; $i <= $last_day->format('j'); $i++){
-    $date = new DateTime(implode('-', array($year,$month,$i)));
-    $today->setTimezone(new DateTimeZone(SimpleMRICalendar::$timezone));
+    $date  = SimpleMRICalendar::date(array('year'=>$year, 'month'=>$month, 'day'=>$i));
+
+    $date_start = SimpleMRICalendar::date(array('year'=>$year, 'month'=>$month, 'day'=>$i));
+    $date_start->setTime ( 0, 0, 0 );
+
+    $date_end = SimpleMRICalendar::date(array('year'=>$year, 'month'=>$month, 'day'=>$i));
+    $date_end->setTime ( 23, 59, 59 );
+
     $classes = array();
     if($today->format('Ymd') == $date->format('Ymd')) $classes[] = 'today';
     $events = get_posts(array(
       'post_type'      => 'mri_event',
-      'posts_per_page' => -1,
+      'posts_per_page' => 1,
       'order'          => 'ASC',
-      'meta_key'       => 'date',
+      'meta_key'       => 'start_date',
       'orderby'        => 'meta_value',
       'meta_query' => array(
         array(
-          'key'     => 'production',
-          'compare' => 'IN',
-          'value'   => $production_ids
-        ),
-        array(
-          'key'     => 'date',
-          'compare' => '<',
-          'value'   =>  mktime(0, 0, 0, $date->format('n'), $date->format('j') + 1, $date->format('Y') )
-        ),
-        array(
-          'key'     => 'date',
+          'key'     => 'start_date',
           'compare' => '>',
-          'value'   =>  mktime(0, 0, 0, $date->format('n'), $date->format('j'), $date->format('Y') )
+          'value'   =>  $date_start->format('Y-m-d H:i:s')
+        ),
+        array(
+          'key'     => 'end_date',
+          'compare' => '<',
+          'value'   =>  $date_end->format('Y-m-d H:i:s')
         ),
       ),
     ));
